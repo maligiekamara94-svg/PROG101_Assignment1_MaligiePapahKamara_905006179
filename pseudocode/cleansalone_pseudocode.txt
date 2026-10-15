@@ -1,0 +1,188 @@
+ALGORITHM CleanSalone
+
+CONSTANT HIGH_PRIORITY_DAYS = 3
+CONSTANT MEDIUM_PRIORITY_DAYS = 2
+CONSTANT MAX_CREW_LOAD = 3
+CONSTANT MAX_CREWS = 5
+
+DECLARE totalReports, totalResolved, highCount, mediumCount, lowCount AS Integer
+DECLARE crewLoad[1..MAX_CREWS] AS Integer array
+DECLARE reports AS List of Report records
+DECLARE running AS Boolean
+
+MODULE 1: MAIN PROGRAM
+START
+  CALL InitialiseSystem()
+  SET running = TRUE
+  WHILE running = TRUE DO
+    DISPLAY "1 Report waste site | 2 Update job status | 3 View statistics | 4 Exit"
+    INPUT choice
+    IF choice = 1 THEN
+      CALL SubmitReport()
+    ELSE IF choice = 2 THEN
+      CALL UpdateStatus()
+    ELSE IF choice = 3 THEN
+      CALL GenerateStatistics()
+    ELSE IF choice = 4 THEN
+      SET running = FALSE
+    ELSE
+      DISPLAY "Invalid choice. Enter 1 to 4."
+    END IF
+  END WHILE
+  DISPLAY "Thank you for keeping Salone clean."
+END
+
+FUNCTION InitialiseSystem()
+  SET totalReports = 0
+  SET totalResolved = 0
+  SET highCount = 0, mediumCount = 0, lowCount = 0
+  FOR i = 1 TO MAX_CREWS DO
+    SET crewLoad[i] = 0
+  END FOR
+END FUNCTION
+
+MODULE 2: REPORT INTAKE
+FUNCTION SubmitReport()
+  SET totalReports = totalReports + 1
+  SET reportID = "R" + FormatNumber(totalReports)
+  INPUT location
+  SET wasteType = GetValidWasteType()
+  SET siteSize = GetValidSiteSize()
+  SET nearDrain = GetYesNo("Is the site near a drain or gutter?")
+  SET nearMarket = GetYesNo("Is the site near a market or school?")
+  SET daysUnresolved = GetDays()
+  SET priority = DeterminePriority(wasteType, siteSize, nearDrain, nearMarket, daysUnresolved)
+  SET crew = AssignCrew(location)
+  IF crew = 0 THEN
+    SET status = "QUEUED"
+  ELSE
+    SET status = "ASSIGNED"
+  END IF
+  SAVE new Report(reportID, location, wasteType, siteSize, priority, crew, status)
+  IF priority = "HIGH" THEN
+    SET highCount = highCount + 1
+  ELSE IF priority = "MEDIUM" THEN
+    SET mediumCount = mediumCount + 1
+  ELSE
+    SET lowCount = lowCount + 1
+  END IF
+  DISPLAY reportID, priority, crew, status
+END FUNCTION
+
+FUNCTION GetValidWasteType() RETURNS String
+  REPEAT
+    INPUT wasteType (Household, Plastic, Market or Hazardous)
+    SET valid = (wasteType = "Household" OR wasteType = "Plastic" OR wasteType = "Market" OR wasteType = "Hazardous")
+    IF valid = FALSE THEN
+      DISPLAY "Invalid waste type. Try again."
+    END IF
+  UNTIL valid = TRUE
+  RETURN wasteType
+END FUNCTION
+
+FUNCTION GetValidSiteSize() RETURNS String
+  REPEAT
+    INPUT siteSize (Small, Medium or Large)
+    SET valid = (siteSize = "Small" OR siteSize = "Medium" OR siteSize = "Large")
+    IF valid = FALSE THEN
+      DISPLAY "Invalid size. Enter Small, Medium or Large."
+    END IF
+  UNTIL valid = TRUE
+  RETURN siteSize
+END FUNCTION
+
+FUNCTION GetYesNo(question) RETURNS Boolean
+  REPEAT
+    INPUT answer (Y or N)
+  UNTIL answer = "Y" OR answer = "N"
+  RETURN (answer = "Y")
+END FUNCTION
+
+FUNCTION GetDays() RETURNS Integer
+  REPEAT
+    INPUT days
+    IF days < 0 THEN
+      DISPLAY "Days cannot be negative."
+    END IF
+  UNTIL days >= 0
+  RETURN days
+END FUNCTION
+
+MODULE 3: PRIORITY CHECKER
+FUNCTION DeterminePriority(wasteType, siteSize, nearDrain, nearMarket, days) RETURNS String
+  IF wasteType = "Hazardous" OR nearDrain = TRUE OR nearMarket = TRUE OR days >= HIGH_PRIORITY_DAYS THEN
+    RETURN "HIGH"
+  ELSE IF siteSize = "Large" OR days >= MEDIUM_PRIORITY_DAYS THEN
+    RETURN "MEDIUM"
+  ELSE
+    RETURN "LOW"
+  END IF
+END FUNCTION
+
+MODULE 4: CREW ASSIGNMENT
+FUNCTION AssignCrew(location) RETURNS Integer
+  SET bestCrew = 0
+  SET shortest = 9999
+  FOR i = 1 TO MAX_CREWS DO
+    IF crewLoad[i] < MAX_CREW_LOAD THEN
+      SET d = CalculateDistance(i, location)
+      IF d < shortest THEN
+        SET shortest = d
+        SET bestCrew = i
+      END IF
+    END IF
+  END FOR
+  IF bestCrew <> 0 THEN
+    SET crewLoad[bestCrew] = crewLoad[bestCrew] + 1
+  END IF
+  RETURN bestCrew
+END FUNCTION
+
+MODULE 5: STATUS UPDATE
+FUNCTION UpdateStatus()
+  INPUT reportID
+  SET report = FindReport(reportID)
+  IF report = NOTHING THEN
+    DISPLAY "Report not found."
+  ELSE IF report.status = "RESOLVED" THEN
+    DISPLAY "Report already resolved."
+  ELSE
+    SET report.status = "RESOLVED"
+    SET totalResolved = totalResolved + 1
+    IF report.crew <> 0 THEN
+      SET crewLoad[report.crew] = crewLoad[report.crew] - 1
+    END IF
+    CALL AssignQueuedReports()
+    DISPLAY "Report marked as resolved."
+  END IF
+END FUNCTION
+
+FUNCTION AssignQueuedReports()
+  FOR EACH level IN ["HIGH", "MEDIUM", "LOW"] DO
+    FOR EACH r IN reports DO
+      IF r.status = "QUEUED" AND r.priority = level THEN
+        SET crew = AssignCrew(r.location)
+        IF crew <> 0 THEN
+          SET r.crew = crew
+          SET r.status = "ASSIGNED"
+        END IF
+      END IF
+    END FOR
+  END FOR
+END FUNCTION
+
+MODULE 6: STATISTICS REPORT
+FUNCTION GenerateStatistics()
+  SET queued = 0
+  FOR EACH r IN reports DO
+    IF r.status = "QUEUED" THEN
+      SET queued = queued + 1
+    END IF
+  END FOR
+  IF totalReports > 0 THEN
+    SET rate = (totalResolved / totalReports) * 100
+  ELSE
+    SET rate = 0
+  END IF
+  DISPLAY totalReports, highCount, mediumCount, lowCount, queued, totalResolved, rate
+END FUNCTION
