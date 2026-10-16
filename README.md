@@ -1,8 +1,11 @@
 # CleanSalone: Community Waste Reporting and Collection Tracker
 
 **Course:** PROG101 Principles of Programming Logic and Design
+
 **Assignment:** Assignment 1, Designing Logical Solutions for Sierra Leone Community Challenges
+
 **Student:** Maligie Papah Kamara (905006179)
+
 **Institution:** Limkokwing University of Creative Technology, Sierra Leone Campus
 
 ## Problem
